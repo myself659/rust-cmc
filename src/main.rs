@@ -1,8 +1,49 @@
 use std::{collections::HashMap, fmt};
 
 use clap::{App, Arg};
-use serde::{Deserialize, Serialize};
 use csv::Writer;
+use log::{debug, error, info};
+use log4rs;
+use serde::{Deserialize, Serialize};
+
+#[derive(Debug)]
+enum OneError {
+    NoAPIKey,
+    CSV(csv::Error),
+    IO(std::io::Error),
+    Reqwest(reqwest::Error),
+}
+
+impl std::error::Error for OneError {}
+
+impl fmt::Display for OneError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            OneError::NoAPIKey => write!(f, "No API key is set via the .env variable."),
+            OneError::CSV(err) => write!(f, "Error while writing the CSV file {}", err),
+            OneError::IO(err) => write!(f, "Error while flushing the file {}", err),
+            OneError::Reqwest(err) => write!(f, "Error while fetching data {}", err),
+        }
+    }
+}
+
+impl From<reqwest::Error> for OneError {
+    fn from(err: reqwest::Error) -> OneError {
+        OneError::Reqwest(err)
+    }
+}
+
+impl From<csv::Error> for OneError {
+    fn from(err: csv::Error) -> OneError {
+        OneError::CSV(err)
+    }
+}
+
+impl From<std::io::Error> for OneError {
+    fn from(err: std::io::Error) -> OneError {
+        OneError::IO(err)
+    }
+}
 
 #[derive(Debug, Serialize, Deserialize)]
 struct CMCResponse {
@@ -53,8 +94,9 @@ impl CMCResponse {
 }
 
 #[tokio::main]
-async fn main() -> Result<(), Box<dyn std::error::Error>> {
+async fn main() -> Result<(), OneError> {
     dotenv::dotenv().ok();
+    log4rs::init_file("log4rs.yaml", Default::default()).unwrap();
     let matches = App::new("RUST-CMC")
         .version("1.0")
         .about("rust cmc cmd")
@@ -70,8 +112,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let currencies = matches
         .value_of("currency_list")
         .expect("No currencies were being passed");
+        debug!("Querying the following currencies: {:?}", currencies);
 
     let cmc_pro_api_key = dotenv::var("CMC_PRO_API_KEY").expect("CMC key not set");
+    if cmc_pro_api_key.is_empty() {
+        error!("Empty CMC API KEY provided! Please set one via the .env file!");
+        return Err(OneError::NoAPIKey);
+    }
     let mut params = HashMap::new();
     // params.insert("symbol", "BTC");
     params.insert("symbol", currencies.to_string());
@@ -86,13 +133,24 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let prices = resp.json::<CMCResponse>().await?;
     let mut price_writer = Writer::from_path("prices.csv")?;
-    price_writer.write_record(&["Name", "Symbol", "Price","7DayChange"])?;
+    price_writer.write_record(&["Name", "Symbol", "Price", "7DayChange"])?;
     for (symbol, currency) in prices.data.into_iter() {
-        price_writer.write_record(&[currency.name,
+        price_writer.write_record(&[
+            currency.name,
             symbol.to_owned(),
             currency.quote.0.get("USD").unwrap().price.to_string(),
-            currency.quote.0.get("USD").unwrap().percent_change_7d.to_string() ])?;
+            currency
+                .quote
+                .0
+                .get("USD")
+                .unwrap()
+                .percent_change_7d
+                .to_string(),
+        ])?;
     }
     price_writer.flush()?;
+
+    info!("Queried {} and wrote CSV file", currencies);
+
     Ok(())
 }
