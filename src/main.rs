@@ -1,6 +1,7 @@
-use std::{collections::HashMap, fmt};
+use std::{collections::HashMap, fmt::Display};
 
 use serde::{Serialize, Deserialize};
+use clap::{Arg, App};
 
 #[derive(Debug, Serialize, Deserialize)]
 struct CMCResponse {
@@ -26,7 +27,7 @@ struct Quote {
     percent_change_7d: f64,
 }
 
-impl  fmt::Display for Currency {
+impl  Display for Currency {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "Name: {}, Symbol: {} Price: {} change(7d): {}%",
         self.name,
@@ -46,9 +47,24 @@ impl CMCResponse {
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     dotenv::dotenv().ok();
+    let  matches = App::new("RUST-CMC")
+    .version("1.0")
+    .about("rust cmc cmd")
+    .arg(Arg::new("currency_list")
+    .long("currencies")
+    .short("c")
+    .about("Pass the list of currencies you want to query")
+    .min_values(1)
+    .required(true)
+).get_matches();
+
+let currencies = matches.value_of("currency_list").expect("No currencies were being passed");
+
     let cmc_pro_api_key = dotenv::var("CMC_PRO_API_KEY").expect("CMC key not set");
     let mut params = HashMap::new();
-    params.insert("symbol", "BTC");
+    // params.insert("symbol", "BTC");
+    params.insert("symbol", currencies.to_string());
+
 
     let client = reqwest::Client::new();
     let resp = client
@@ -57,6 +73,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .query(&params)
         .send()
         .await?;
+
     let prices  = resp.json::<CMCResponse>().await?;
     if let Some(bitcoin) = prices.get_currency("BTC"){
         println!("{}", bitcoin);
