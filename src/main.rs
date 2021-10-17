@@ -52,7 +52,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     .about("rust cmc cmd")
     .arg(Arg::new("currency_list")
     .long("currencies")
-    .short("c")
     .about("Pass the list of currencies you want to query")
     .min_values(1)
     .required(true)
