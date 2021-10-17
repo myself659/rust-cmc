@@ -1,4 +1,47 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, fmt};
+
+use serde::{Serialize, Deserialize};
+
+#[derive(Debug, Serialize, Deserialize)]
+struct CMCResponse {
+    data: HashMap<String, Currency>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+struct Currency {
+    name: String,
+    symbol: String,
+    quote: Quotes,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+struct Quotes(HashMap<String, Quote>);
+// struct Quotes {
+//     HashMap<String, Quote>
+// }
+
+#[derive(Debug, Serialize, Deserialize)]
+struct Quote {
+    price: f64,
+    percent_change_7d: f64,
+}
+
+impl  fmt::Display for Currency {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "Name: {}, Symbol: {} Price: {} change(7d): {}%",
+        self.name,
+        self.symbol,
+        self.quote.0.get("USD").unwrap().price.to_string(),
+        self.quote.0.get("USD").unwrap().percent_change_7d.to_string()
+        )
+    }
+}
+
+impl CMCResponse {
+    fn get_currency(&self, currency: &str) -> Option<&Currency> {
+        self.data.get(currency)
+    }
+}
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -9,12 +52,17 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let client = reqwest::Client::new();
     let resp = client
-    .get("https://pro-api.coinmarketcap.com/v1/cryptocurrency/quotes/latest")
-    .header("X-CMC_PRO_API_KEY", cmc_pro_api_key)
-    .query(&params)
-    .send()
-    .await?;
-    let resp  = resp.text().await?;
-    println!("{:#?}", resp);
+        .get("https://pro-api.coinmarketcap.com/v1/cryptocurrency/quotes/latest")
+        .header("X-CMC_PRO_API_KEY", cmc_pro_api_key)
+        .query(&params)
+        .send()
+        .await?;
+    let prices  = resp.json::<CMCResponse>().await?;
+    if let Some(bitcoin) = prices.get_currency("BTC"){
+        println!("{}", bitcoin);
+    }else {
+        println!("bitcoin is not in the list");
+    }
+
     Ok(())
 }
