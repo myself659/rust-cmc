@@ -6,6 +6,12 @@ use log::{debug, error, info};
 use log4rs;
 use serde::{Deserialize, Serialize};
 
+#[derive(Serialize, Deserialize, Debug)]
+struct EODResponse {
+    code: String,
+    close: f64,
+}
+
 #[derive(Debug)]
 enum OneError {
     NoAPIKey,
@@ -107,13 +113,23 @@ async fn main() -> Result<(), OneError> {
                 .min_values(1)
                 .required(true),
         )
+        .arg(
+            Arg::new("etfs")
+                .long("etfs")
+                .about("Pass the ETF symbol to fetch price for")
+                .takes_value(true)
+                .required(true),
+        )
         .get_matches();
 
     let currencies = matches
         .value_of("currency_list")
         .expect("No currencies were being passed");
-        debug!("Querying the following currencies: {:?}", currencies);
+    let etfs = matches.value_of("etfs").expect("No ETF symbol passed");
 
+    debug!("Querying the following currencies: {:?}", currencies);
+
+    let eod_token = dotenv::var("EOD_TOKEN").expect("EOD token not set");
     let cmc_pro_api_key = dotenv::var("CMC_PRO_API_KEY").expect("CMC key not set");
     if cmc_pro_api_key.is_empty() {
         error!("Empty CMC API KEY provided! Please set one via the .env file!");
@@ -152,5 +168,14 @@ async fn main() -> Result<(), OneError> {
 
     info!("Queried {} and wrote CSV file", currencies);
 
+    let etf = client
+        .get(format!(
+            "https://eodhistoricaldata.com/api/real-time/{}?api_token={}&fmt=json",
+            etfs, eod_token
+        ))
+        .send()
+        .await?;
+    let amundi_etf = etf.json::<EODResponse>().await?;
+    debug!("Fetched ETF: {}", amundi_etf.close);
     Ok(())
 }
