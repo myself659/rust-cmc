@@ -2,6 +2,7 @@ use std::{collections::HashMap, fmt};
 
 use clap::{App, Arg};
 use serde::{Deserialize, Serialize};
+use csv::Writer;
 
 #[derive(Debug, Serialize, Deserialize)]
 struct CMCResponse {
@@ -84,11 +85,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .await?;
 
     let prices = resp.json::<CMCResponse>().await?;
-    if let Some(bitcoin) = prices.get_currency("BTC") {
-        println!("{}", bitcoin);
-    } else {
-        println!("bitcoin is not in the list");
+    let mut price_writer = Writer::from_path("prices.csv")?;
+    price_writer.write_record(&["Name", "Symbol", "Price","7DayChange"])?;
+    for (symbol, currency) in prices.data.into_iter() {
+        price_writer.write_record(&[currency.name,
+            symbol.to_owned(),
+            currency.quote.0.get("USD").unwrap().price.to_string(),
+            currency.quote.0.get("USD").unwrap().percent_change_7d.to_string() ])?;
     }
-
+    price_writer.flush()?;
     Ok(())
 }
