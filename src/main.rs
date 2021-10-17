@@ -1,4 +1,4 @@
-use std::{collections::HashMap, fmt::Display};
+use std::{collections::HashMap, fmt};
 
 use serde::{Serialize, Deserialize};
 use clap::{Arg, App};
@@ -27,7 +27,7 @@ struct Quote {
     percent_change_7d: f64,
 }
 
-impl  Display for Currency {
+impl  fmt::Display for Currency {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "Name: {}, Symbol: {} Price: {} change(7d): {}%",
         self.name,
