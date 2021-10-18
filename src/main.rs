@@ -13,6 +13,14 @@ use sheets4::Error;
 use sheets4::Sheets;
 use yup_oauth2::read_service_account_key;
 
+mod cmc;
+mod eod;
+mod error;
+
+use cmc::CMCResponse;
+use eod::EODResponse;
+use error::OneError;
+
 #[macro_use]
 extern crate lazy_static;
 
@@ -21,98 +29,9 @@ lazy_static! {
     static ref SECRET_PATH: &'static str = "secret.json";
 }
 
-#[derive(Serialize, Deserialize, Debug)]
-struct EODResponse {
-    code: String,
-    close: f64,
-}
 
-#[derive(Debug)]
-enum OneError {
-    NoAPIKey,
-    CSV(csv::Error),
-    IO(std::io::Error),
-    Reqwest(reqwest::Error),
-}
 
-impl std::error::Error for OneError {}
 
-impl fmt::Display for OneError {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match self {
-            OneError::NoAPIKey => write!(f, "No API key is set via the .env variable."),
-            OneError::CSV(err) => write!(f, "Error while writing the CSV file {}", err),
-            OneError::IO(err) => write!(f, "Error while flushing the file {}", err),
-            OneError::Reqwest(err) => write!(f, "Error while fetching data {}", err),
-        }
-    }
-}
-
-impl From<reqwest::Error> for OneError {
-    fn from(err: reqwest::Error) -> OneError {
-        OneError::Reqwest(err)
-    }
-}
-
-impl From<csv::Error> for OneError {
-    fn from(err: csv::Error) -> OneError {
-        OneError::CSV(err)
-    }
-}
-
-impl From<std::io::Error> for OneError {
-    fn from(err: std::io::Error) -> OneError {
-        OneError::IO(err)
-    }
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-struct CMCResponse {
-    data: HashMap<String, Currency>,
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-struct Currency {
-    name: String,
-    symbol: String,
-    quote: Quotes,
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-struct Quotes(HashMap<String, Quote>);
-// struct Quotes {
-//     HashMap<String, Quote>
-// }
-
-#[derive(Debug, Serialize, Deserialize)]
-struct Quote {
-    price: f64,
-    percent_change_7d: f64,
-}
-
-impl fmt::Display for Currency {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(
-            f,
-            "Name: {}, Symbol: {} Price: {} change(7d): {}%",
-            self.name,
-            self.symbol,
-            self.quote.0.get("USD").unwrap().price.to_string(),
-            self.quote
-                .0
-                .get("USD")
-                .unwrap()
-                .percent_change_7d
-                .to_string()
-        )
-    }
-}
-
-impl CMCResponse {
-    fn get_currency(&self, currency: &str) -> Option<&Currency> {
-        self.data.get(currency)
-    }
-}
 
 #[tokio::main]
 async fn main() -> Result<(), OneError> {
@@ -148,7 +67,7 @@ async fn main() -> Result<(), OneError> {
     let cmc_pro_api_key = dotenv::var("CMC_PRO_API_KEY").expect("CMC key not set");
     if cmc_pro_api_key.is_empty() {
         error!("Empty CMC API KEY provided! Please set one via the .env file!");
-        return Err(OneError::NoAPIKey);
+        return Err(error::OneError::NoAPIKey);
     }
     let mut params = HashMap::new();
     // params.insert("symbol", "BTC");
