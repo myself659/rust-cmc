@@ -144,7 +144,7 @@ async fn main() -> Result<(), OneError> {
     sheet.update_sheet(coins).await;
     sheet.update_sheet(etfs).await;
 
-    // sheet.fetch_latest_values().await;
+    sheet.fetch_latest_values().await;
 
     let coins = Coins::new(sheet.get_values("CRYPTO_TOKEN_PRICES"));
     let etfs = ETFs::new(sheet.get_values("ETF"));
