@@ -6,7 +6,7 @@ use serde::{Serialize, Deserialize};
 use lazy_static::lazy_static;
 use google_sheets4::{Sheets, api::ValueRange};
 use yup_oauth2::read_service_account_key;
-use spreadsheet::Spreadsheet;
+
 
 lazy_static! {
     static ref CRYPTO_TOKEN_PRICES: String = dotenv::var("CRYPTO_TOKEN_PRICES").expect("CRYPTO_TOKEN_PRICES not set in ENV");

@@ -19,12 +19,12 @@ mod etfs;
 mod email;
 mod eod;
 mod error;
-mod spreadsheet;
+mod gspreadsheet;
 
 use cmc::CMCResponse;
 use eod::EODResponse;
 use error::OneError;
-use spreadsheet::Spreadsheet;
+use gspreadsheet::Spreadsheet;
 use etfs::ETFs;
 use email::{EMail, HTML};
 use coins::Coins;
