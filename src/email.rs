@@ -7,8 +7,8 @@ pub struct EMail {
 }
 
 lazy_static! {
-    static ref FROM_ADDRESS: &'static str = "onetutorial@rustmeetup.com";
-    static ref TO_ADDRESS: Vec<&'static str> = vec!["byteadventures1@gmail.com"];
+    static ref FROM_ADDRESS: &'static str = "send@rustmeetup.com";
+    static ref TO_ADDRESS: Vec<&'static str> = vec!["recv@gmail.com"];
 }
 
 pub trait HTML {
