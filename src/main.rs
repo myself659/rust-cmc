@@ -1,10 +1,25 @@
 use std::{collections::HashMap, fmt};
 
 use clap::{App, Arg};
-use csv::Writer;
+// use csv::Writer;
 use log::{debug, error, info};
 use log4rs;
 use serde::{Deserialize, Serialize};
+
+extern crate google_sheets4 as sheets4;
+extern crate yup_oauth2 as oauth2;
+use sheets4::api::ValueRange;
+use sheets4::Error;
+use sheets4::Sheets;
+use yup_oauth2::read_service_account_key;
+
+#[macro_use]
+extern crate lazy_static;
+
+lazy_static! {
+    static ref SHEET_ID: &'static str = "1kGe3O8h7quZpROV7ct0bSgICZRQmZWhppEttF2h9M8Y";
+    static ref SECRET_PATH: &'static str = "secret.json";
+}
 
 #[derive(Serialize, Deserialize, Debug)]
 struct EODResponse {
@@ -148,6 +163,7 @@ async fn main() -> Result<(), OneError> {
         .await?;
 
     let prices = resp.json::<CMCResponse>().await?;
+    /*
     let mut price_writer = Writer::from_path("prices.csv")?;
     price_writer.write_record(&["Name", "Symbol", "Price", "7DayChange"])?;
     for (symbol, currency) in prices.data.into_iter() {
@@ -165,6 +181,7 @@ async fn main() -> Result<(), OneError> {
         ])?;
     }
     price_writer.flush()?;
+    */
 
     info!("Queried {} and wrote CSV file", currencies);
 
@@ -177,5 +194,56 @@ async fn main() -> Result<(), OneError> {
         .await?;
     let amundi_etf = etf.json::<EODResponse>().await?;
     debug!("Fetched ETF: {}", amundi_etf.close);
+    let coins = ValueRange {
+        major_dimension: Some("COLUMNS".to_string()),
+        range: Some(format!("{}!{}2:{}4", "Crypto", "C", "C").to_owned()),
+        values: Some(vec![vec![
+            prices.data.get(&"BTC".to_owned()).unwrap().quote.0.get("USD").unwrap().price.to_string(),
+            prices.data.get(&"ETH".to_owned()).unwrap().quote.0.get("USD").unwrap().price.to_string(),
+            prices.data.get(&"DOGE".to_owned()).unwrap().quote.0.get("USD").unwrap().price.to_string(),
+            ]]),
+    };
+
+    update_google_sheet(&SECRET_PATH, coins).await;
+
     Ok(())
+}
+
+async fn update_google_sheet(secret_path: &str, values: ValueRange) {
+    let authenticator = yup_oauth2::ServiceAccountAuthenticator::builder(
+        read_service_account_key(secret_path).await.unwrap(),
+    )
+    .build()
+    .await
+    .expect("Failed to create authenticator");
+
+    let hub = Sheets::new(
+        hyper::Client::builder().build(hyper_rustls::HttpsConnector::with_native_roots()),
+        authenticator,
+    );
+    let range = values.clone().range.unwrap();
+    let result = hub
+        .spreadsheets()
+        .values_update(values.clone(), &SHEET_ID, &values.range.unwrap())
+        .value_input_option("USER_ENTERED")
+        .doit()
+        .await;
+
+    match result {
+        Err(e) => match e {
+            Error::HttpError(_)
+            | Error::Io(_)
+            | Error::MissingAPIKey
+            | Error::MissingToken(_)
+            | Error::Cancelled
+            | Error::UploadSizeLimitExceeded(_, _)
+            | Error::Failure(_)
+            | Error::BadRequest(_)
+            | Error::FieldClash(_)
+            | Error::JsonDecodeError(_, _) => {
+                eprintln!("{}", e)
+            }
+        },
+        Ok((_, _)) => info!("{} Updated range: {}", chrono::offset::Utc::now(), range),
+    }
 }
