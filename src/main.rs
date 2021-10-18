@@ -1,4 +1,4 @@
-use std::{collections::HashMap, fmt};
+use std::{collections::HashMap};
 
 use clap::{App, Arg};
 // use csv::Writer;
@@ -14,12 +14,21 @@ use sheets4::Sheets;
 use yup_oauth2::read_service_account_key;
 
 mod cmc;
+mod coins;
+mod etfs;
+mod email;
 mod eod;
 mod error;
+mod spreadsheet;
 
 use cmc::CMCResponse;
 use eod::EODResponse;
 use error::OneError;
+use spreadsheet::Spreadsheet;
+use etfs::ETFs;
+use email::{EMail, HTML};
+use coins::Coins;
+
 
 #[macro_use]
 extern crate lazy_static;
@@ -123,7 +132,28 @@ async fn main() -> Result<(), OneError> {
             ]]),
     };
 
-    update_google_sheet(&SECRET_PATH, coins).await;
+    let mut sheet = Spreadsheet::new(&SHEET_ID, &SECRET_PATH);
+
+    sheet.update_sheet(coins).await;
+
+
+    sheet.fetch_latest_values().await;
+
+    let coins = Coins::new(sheet.get_values("CRYPTO_TOKEN_PRICES"));
+    let etfs = ETFs::new(sheet.get_values("ETF"));
+
+    let mut components: Vec<&dyn HTML> = Vec::new();
+
+    components.push(&coins);
+    components.push(&etfs);
+
+    let email = EMail::new(components);
+
+    match email.send() {
+        Ok(_) => info!("{} E-Mail sent", chrono::offset::Utc::now()),
+        Err(e) => error!("Error sending E-Mail {}", e)
+    }
+
 
     Ok(())
 }
