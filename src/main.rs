@@ -132,10 +132,17 @@ async fn main() -> Result<(), OneError> {
             ]]),
     };
 
+    let etfs = ValueRange {
+        major_dimension: Some("COLUMNS".to_string()),
+        range: Some(format!("{}!{}2:{}2", "ETFs", "C", "C").to_owned()),
+        values: Some(vec![vec![
+            amundi_etf.close.to_string(),
+        ]])
+    };
     let mut sheet = Spreadsheet::new(&SHEET_ID, &SECRET_PATH);
 
     sheet.update_sheet(coins).await;
-
+    sheet.update_sheet(etfs).await;
 
     sheet.fetch_latest_values().await;
 
